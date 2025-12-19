@@ -31,26 +31,44 @@ app.use("/api/user", userRoutes);
 app.use("/api/messages", messageRoutes);
 
 // Helper to check DB connection and init schema
+let isDbInitialized = false;
 const initDb = async () => {
+  if (isDbInitialized) return;
   try {
-    const schemaPath = path.join(__dirname, "src", "db", "schema.sql");
+    // Vercel might have different pathing for bundled files
+    const schemaPath = path.resolve(process.cwd(), "src", "db", "schema.sql");
+    console.log("Attempting to load schema from:", schemaPath);
+
     if (fs.existsSync(schemaPath)) {
       const schemaSql = fs.readFileSync(schemaPath, "utf8");
       await query(schemaSql);
       console.log("Database schema initialized.");
+      isDbInitialized = true;
     } else {
-      console.error("Schema file not found at:", schemaPath);
+      console.warn(
+        "Schema file not found at:",
+        schemaPath,
+        ". Skipping initialization (assuming DB is already set up)."
+      );
     }
   } catch (err) {
     console.error("Failed to initialize database schema:", err);
-    process.exit(1);
+    // Don't exit process in serverless!
   }
 };
 
 const PORT = process.env.PORT || 5000;
 
 app.get("/", (req, res) => {
-  res.send("Chat Server is running");
+  res.send("Chat Server is running (DostChats)");
+});
+
+// Middleware to ensure DB is initialized on first request for serverless
+app.use(async (req, res, next) => {
+  if (!isDbInitialized && process.env.VERCEL) {
+    await initDb();
+  }
+  next();
 });
 
 io.on("connection", (socket) => {
@@ -62,13 +80,9 @@ io.on("connection", (socket) => {
   });
 
   socket.on("send_message", async (data) => {
-    // data: { senderId, receiverId, content }
     const { senderId, receiverId, content } = data;
     try {
       const savedMessage = await createMessage(senderId, receiverId, content);
-
-      // Emit to both sender and receiver rooms directly or a shared room
-      // For this simple app, we can emit to a room ID that is specific to the pair
       const room = [senderId, receiverId].sort((a, b) => a - b).join("-");
       io.to(room).emit("receive_message", savedMessage);
     } catch (err) {
@@ -81,10 +95,13 @@ io.on("connection", (socket) => {
   });
 });
 
-initDb().then(() => {
-  server.listen(PORT, () => {
-    console.log(`Server is running on port ${PORT}`);
+// Only start the server if we're not running as a Vercel serverless function
+if (!process.env.VERCEL) {
+  initDb().then(() => {
+    server.listen(PORT, () => {
+      console.log(`Server is running on port ${PORT}`);
+    });
   });
-});
+}
 
 export default app;
