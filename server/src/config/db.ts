@@ -4,8 +4,9 @@ import { Pool } from "pg";
 dotenv.config();
 
 if (!process.env.DATABASE_URL) {
-  console.error("DATABASE_URL is not defined in environment variables");
-  process.exit(1); // Exit if DB connection string is missing
+  console.warn(
+    "DATABASE_URL is not defined in environment variables. Database queries will fail."
+  );
 }
 
 const pool = new Pool({

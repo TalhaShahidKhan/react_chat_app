@@ -1,4 +1,4 @@
-import bcrypt from "bcrypt";
+import bcrypt from "bcryptjs";
 import { Request, Response } from "express";
 import jwt from "jsonwebtoken";
 import { createUser, findUserByEmail, findUserById } from "../models/userModel";
@@ -11,6 +11,7 @@ export const register = async (req: Request, res: Response) => {
   }
 
   try {
+    console.log("Registering user:", email);
     const existingUser = await findUserByEmail(email);
     if (existingUser) {
       return res.status(400).json({ message: "User already exists" });
@@ -32,6 +33,7 @@ export const login = async (req: Request, res: Response) => {
   const { email, password } = req.body;
 
   try {
+    console.log("Login attempt:", email);
     const user = await findUserByEmail(email);
     if (!user) {
       return res.status(400).json({ message: "Invalid credentials" });
